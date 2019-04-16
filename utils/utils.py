@@ -22,8 +22,8 @@ def add_isYear(df):
         else:
             isYear.append(0)
     df['isYear'] = isYear
-    
-    
+
+
 # save and load functions
 def save2pkl(path, file):
     """
@@ -43,11 +43,17 @@ def load_pkl(path):
 
 
 # build embeddings functions
-def elmo_embeddings(df, elmo):
+def elmo_embeddings(df,
+                    elmo,
+                    context_col='q',
+                    answers_cols=['a1', 'a2', 'a3', 'a4'],
+                    ca_col='ca',
+                    from0to3=False):
     """
     Returns list of dictionaries. 
     Each dictionary has the following format:
-    {'q': <question embedding>, 
+    {'id': id of question in DataFrame,
+     'q': <question embedding>, 
      'a_i': <i-th answer embedding>,
      'ca': correct answer}
      
@@ -62,24 +68,42 @@ def elmo_embeddings(df, elmo):
     num = re.compile('[0-4]+')
     for i in tqdm(range(len(df))):
         problems = {}
-        q = prog.findall(df.iloc[i]['q'])
-        a1 = prog.findall(df.iloc[i]['a1'])
-        a2 = prog.findall(df.iloc[i]['a2'])
-        a3 = prog.findall(df.iloc[i]['a3'])
-        a4 = prog.findall(df.iloc[i]['a4'])
-        if isinstance(df.iloc[i]['ca'], int):
-            correct_answer = df.iloc[i]['ca'] - 1
-        else:   
-            correct_answer = int(num.findall(df.iloc[i]['ca'])[0])
+        q = prog.findall(df.iloc[i][context_col])
+        a1 = prog.findall(df.iloc[i][answers_cols[0]])
+        a2 = prog.findall(df.iloc[i][answers_cols[1]])
+        a3 = prog.findall(df.iloc[i][answers_cols[2]])
+        a4 = prog.findall(df.iloc[i][answers_cols[3]])
+        if isinstance(df.iloc[i][ca_col], int):
+            if not from0to3:
+                correct_answer = df.iloc[i][ca_col] - 1
+            else:
+                correct_answer = df.iloc[i][ca_col]
+        else:
+            if isinstance(df.iloc[i][ca_col], str):
+                correct_answer = int(num.findall(df.iloc[i][ca_col])[0])
+            else:
+                try:
+                    correct_answer = int(df.iloc[i][ca_col])
+                except Exception:
+                    raise TypeError
             if correct_answer != 0:
-                correct_answer -= 1
-        
+                if not from0to3:
+                    correct_answer -= 1
+
         embs = elmo([q, a1, a2, a3, a4])
-        
-        problems = {'q': embs[0], 'a1': embs[1], 'a2': embs[2], 
-                    'a3': embs[3], 'a4': embs[4], 'ca': correct_answer}
+
+        problems = {
+            'id': i,
+            'q': embs[0],
+            'a1': embs[1],
+            'a2': embs[2],
+            'a3': embs[3],
+            'a4': embs[4],
+            'ca': correct_answer
+        }
         embeddings.append(problems)
     return embeddings
+
 
 # this function does not work correctly with out of vocabulary trigrams
 def fasttext_embeddings(df, model):
@@ -94,32 +118,17 @@ def fasttext_embeddings(df, model):
         answer4 = np.mean(model.wv[prog.findall(df.iloc[i]['a4'])], axis=0)
         if isinstance(df.iloc[i]['ca'], int):
             correct_answer = df.iloc[i]['ca'] - 1
-        else:   
+        else:
             correct_answer = int(num.findall(df.iloc[i]['ca'])[0])
             if correct_answer != 0:
                 correct_answer -= 1
-        
-        embs.append({'q': question, 'a1': answer1, 'a2': answer2,
-                                    'a3': answer3, 'a4': answer4, 
-                                    'ca': correct_answer})
+
+        embs.append({
+            'q': question,
+            'a1': answer1,
+            'a2': answer2,
+            'a3': answer3,
+            'a4': answer4,
+            'ca': correct_answer
+        })
     return embs
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
